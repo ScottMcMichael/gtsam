@@ -231,13 +231,15 @@ TEST(Serialization, largeSerialization) {
   gtsam::Values isamInitialValues;
   gtsam::ISAM2 isamSolver;
   gtsam::FastVector<size_t> factorsToRemove;
-  size_t symbolCounter;
+  size_t symbolCounter = 0;
   
-  std::ifstream inputStream(gtsamBinaryPath);
-  boost::archive::binary_iarchive inputArchive(inputStream);
-  inputArchive >> isamGraph
-               >> isamSolver
-               >> symbolCounter;
+  // Load graph from data file
+  //std::ifstream inputStream(gtsamBinaryPath);
+  //boost::archive::binary_iarchive inputArchive(inputStream);
+  //inputArchive >> isamGraph
+  //             >> isamSolver
+  //             >> symbolCounter;
+
 
   gtsam::Vector6 temp6;
   for (int i = 0; i < 10; ++i) {
@@ -248,7 +250,12 @@ TEST(Serialization, largeSerialization) {
   gtsam::Quaternion q(1.0, 0.0, 0.0, 0.0);
   gtsam::Pose3 transform(gtsam::Rot3(q), p);
 
-  for (int i=0; i<20; ++i) {
+  // Generate a new graph
+  isamGraph.add(gtsam::PriorFactor<gtsam::Pose3>(gtsam::Symbol('x', 0), gtsam::Pose3(), noiseModel));
+  isamInitialValues.insert_or_assign(gtsam::Symbol('x', 0), gtsam::Pose3());
+  ++symbolCounter;
+
+  for (int i=0; i<5000; ++i) {
     size_t lastSymbolIndex = symbolCounter - 1;
     size_t nextSymbolIndex = symbolCounter;
 
@@ -264,13 +271,15 @@ TEST(Serialization, largeSerialization) {
     isamInitialValues.clear();
     factorsToRemove.clear();
     
-    std::string outputFolder = "./";
-    std::stringstream ss;
-    ss << outputFolder << "/gt" << i << ".bin";
-    std::cout << "Write: " << ss.str() << std::endl;
-    std::ofstream outputStream(ss.str());
-    boost::archive::binary_oarchive outputArchive(outputStream);
-    outputArchive << isamSolver;
+    if (i > 4400) {
+      std::string outputFolder = "./";
+      std::stringstream ss;
+      ss << outputFolder << "/gt" << i << ".bin";
+      std::cout << "Write: " << ss.str() << std::endl;
+      std::ofstream outputStream(ss.str());
+      boost::archive::binary_oarchive outputArchive(outputStream);
+      outputArchive << isamSolver;
+    }
   }
   EXPECT(true);
 }
