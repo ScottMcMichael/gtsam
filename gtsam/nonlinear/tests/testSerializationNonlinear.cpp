@@ -24,6 +24,9 @@
 #include <gtsam/geometry/Cal3_S2.h>
 #include <gtsam/geometry/Cal3DS2.h>
 #include <gtsam/geometry/Cal3Bundler.h>
+#include <gtsam/slam/BetweenFactor.h>
+#include <gtsam/slam/PoseRotationPrior.h>
+#include <gtsam/navigation/GPSFactor.h>
 
 #include <gtsam/base/serializationTestHelpers.h>
 #include <CppUnitLite/TestHarness.h>
@@ -36,6 +39,7 @@ using namespace gtsam::serializationTestHelpers;
 /* ************************************************************************* */
 // Create GUIDs for Noisemodels
 BOOST_CLASS_EXPORT_GUID(gtsam::noiseModel::Diagonal, "gtsam_noiseModel_Diagonal")
+BOOST_CLASS_EXPORT_GUID(gtsam::noiseModel::Gaussian, "gtsam_noiseModel_Gaussian");
 BOOST_CLASS_EXPORT_GUID(gtsam::noiseModel::mEstimator::Base , "gtsam_noiseModel_mEstimator_Base")
 BOOST_CLASS_EXPORT_GUID(gtsam::noiseModel::mEstimator::Null , "gtsam_noiseModel_mEstimator_Null")
 BOOST_CLASS_EXPORT_GUID(gtsam::noiseModel::mEstimator::Fair , "gtsam_noiseModel_mEstimator_Fair")
@@ -51,6 +55,9 @@ BOOST_CLASS_EXPORT_GUID(gtsam::SharedDiagonal, "gtsam_SharedDiagonal")
 /* ************************************************************************* */
 // Create GUIDs for factors
 BOOST_CLASS_EXPORT_GUID(gtsam::PriorFactor<gtsam::Pose3>, "gtsam::PriorFactor<gtsam::Pose3>")
+BOOST_CLASS_EXPORT_GUID(gtsam::BetweenFactor<gtsam::Pose3>, "gtsam::BetweenFactor<gtsam::Pose3>")
+BOOST_CLASS_EXPORT_GUID(gtsam::GPSFactor, "gtsam::GPSFactor");
+BOOST_CLASS_EXPORT_GUID(gtsam::PoseRotationPrior<gtsam::Pose3>, "gtsam::PoseRotationPrior<gtsam::Pose3>");
 BOOST_CLASS_EXPORT_GUID(gtsam::JacobianFactor, "gtsam::JacobianFactor")
 BOOST_CLASS_EXPORT_GUID(gtsam::HessianFactor , "gtsam::HessianFactor")
 BOOST_CLASS_EXPORT_GUID(gtsam::GaussianConditional , "gtsam::GaussianConditional")
@@ -213,6 +220,62 @@ TEST(Serialization, ISAM2) {
   }
   EXPECT(assert_equal(p1, p2));
 }
+
+
+
+TEST(Serialization, largeSerialization) {
+
+  const std::string gtsamBinaryPath = "large_factor_graph.dat";
+
+  gtsam::NonlinearFactorGraph isamGraph;
+  gtsam::Values isamInitialValues;
+  gtsam::ISAM2 isamSolver;
+  gtsam::FastVector<size_t> factorsToRemove;
+  size_t symbolCounter;
+  
+  std::ifstream inputStream(gtsamBinaryPath);
+  boost::archive::binary_iarchive inputArchive(inputStream);
+  inputArchive >> isamGraph
+               >> isamSolver
+               >> symbolCounter;
+
+  gtsam::Vector6 temp6;
+  for (int i = 0; i < 10; ++i) {
+    temp6[i] = 0.1;
+  }
+  gtsam::noiseModel::Diagonal::shared_ptr noiseModel = gtsam::noiseModel::Diagonal::Sigmas(temp6);
+  gtsam::Point3 p(0.3, -0.1, 0.01);
+  gtsam::Quaternion q(1.0, 0.0, 0.0, 0.0);
+  gtsam::Pose3 transform(gtsam::Rot3(q), p);
+
+  for (int i=0; i<20; ++i) {
+    size_t lastSymbolIndex = symbolCounter - 1;
+    size_t nextSymbolIndex = symbolCounter;
+
+    gtsam::Symbol lastSymbol(gtsam::Symbol('x', lastSymbolIndex));
+    gtsam::Symbol nextSymbol(gtsam::Symbol('x', nextSymbolIndex));
+    isamGraph.add(gtsam::BetweenFactor<gtsam::Pose3>(lastSymbol, nextSymbol, transform, noiseModel));
+    isamInitialValues.insert_or_assign(nextSymbol, transform);
+
+    isamSolver.update(isamGraph, isamInitialValues, factorsToRemove);
+
+    ++symbolCounter;
+    isamGraph.resize(0);
+    isamInitialValues.clear();
+    factorsToRemove.clear();
+    
+    std::string outputFolder = "./";
+    std::stringstream ss;
+    ss << outputFolder << "/gt" << i << ".bin";
+    std::cout << "Write: " << ss.str() << std::endl;
+    std::ofstream outputStream(ss.str());
+    boost::archive::binary_oarchive outputArchive(outputStream);
+    outputArchive << isamSolver;
+  }
+  EXPECT(true);
+}
+
+
 
 /* ************************************************************************* */
 int main() { TestResult tr; return TestRegistry::runAllTests(tr); }
