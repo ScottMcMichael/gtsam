@@ -56,6 +56,14 @@ using ConcurrentMapBase = gtsam::FastMap<KEY, VALUE>;
 
 namespace gtsam {
 
+template <class T>
+void cereal(T &a) {}
+/*
+template <>
+void cereal<ISAM2Clique>(T &a) {
+  std::cout << "Tree size = " << a.treeSize() << std::endl;
+}
+    */
 /**
  * FastMap is a thin wrapper around std::map that uses the boost
  * fast_pool_allocator instead of the default STL allocator.  This is just a
@@ -106,9 +114,42 @@ private:
   void save(Archive& ar, const unsigned int /*version*/) const
   {
     // Copy to an STL container and serialize that
+    std::cout << "Create fastvector..." << std::endl;
     FastVector<std::pair<KEY, VALUE> > map(this->size());
+    std::cout << "Fastvector copy..." << std::endl;
     std::copy(this->begin(), this->end(), map.begin());
+    std::cout << "Serialize fastvector of size " << map.size() << std::endl;
+    /*
+    // Element zero in the vector contains all the factors?
+    auto iter = this->begin();
+    while (iter != this->end()) {
+        cereal(iter->first);
+        cereal(iter->second);
+      ++iter;
+    }
+    
+    
+    //for (size_t i=0; i<map.size(); ++i) {
+    //for (size_t i=0; i<1; ++i) {
+    iter = this->begin();
+    while (iter != this->end()) {
+        std::cout << "Serialize single element "  << std::endl;
+        //std::cout << map[i].first << std::endl;
+        //std::cout << map[i].second << std::endl;
+        cereal(iter->first);
+        cereal(iter->second);
+        try {
+          ar & BOOST_SERIALIZATION_NVP(iter->first);
+          ar & BOOST_SERIALIZATION_NVP(iter->second);
+        } catch(std::exception &e) {
+            std::cout << "Caught " << e.what() << std::endl;
+        }
+      ++iter;
+      break;
+    }
+    */
     ar & BOOST_SERIALIZATION_NVP(map);
+    std::cout << "Done serializing fastvector of size " << map.size() << std::endl;
   }
   template<class Archive>
   void load(Archive& ar, const unsigned int /*version*/)

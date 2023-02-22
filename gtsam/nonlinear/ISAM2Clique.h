@@ -120,6 +120,18 @@ class GTSAM_EXPORT ISAM2Clique
    */
   void findAll(const KeySet& markedMask, KeySet* keys) const;
 
+  
+  friend class boost::serialization::access;
+  template <class ARCHIVE>
+  void serializeNoLinks(ARCHIVE& ar) {
+
+    std::cout << "==== ISAM2Clique no links\n";
+    Base::serializeNoLinks(ar);
+    ar& BOOST_SERIALIZATION_NVP(cachedFactor_);
+    ar& BOOST_SERIALIZATION_NVP(gradientContribution_);
+  }
+  
+  
  private:
   /**
    * Check if clique was replaced, or if any parents were changed above the
@@ -151,10 +163,14 @@ class GTSAM_EXPORT ISAM2Clique
   friend class boost::serialization::access;
   template <class ARCHIVE>
   void serialize(ARCHIVE& ar, const unsigned int /*version*/) {
+      
+      //print("debug");
+    std::cout << "==== ISAM2Clique\n";
     ar& BOOST_SERIALIZATION_BASE_OBJECT_NVP(Base);
     ar& BOOST_SERIALIZATION_NVP(cachedFactor_);
     ar& BOOST_SERIALIZATION_NVP(gradientContribution_);
   }
+  
 };  // \struct ISAM2Clique
 
 /**

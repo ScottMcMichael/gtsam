@@ -181,6 +181,17 @@ namespace gtsam {
 
     friend class BayesTree<DerivedType>;
 
+    
+    
+    friend class boost::serialization::access;
+    template<class ARCHIVE>
+    void serializeNoLinks(ARCHIVE & ar) {
+      ar & BOOST_SERIALIZATION_NVP(is_root);
+      ar & BOOST_SERIALIZATION_NVP(conditional_);
+      ar & BOOST_SERIALIZATION_NVP(problemSize_);
+    }
+    
+    
   protected:
 
     /// Calculate set \f$ S \setminus B \f$ for shortcut calculations
@@ -208,10 +219,33 @@ namespace gtsam {
       }
       ar & BOOST_SERIALIZATION_NVP(is_root);
       ar & BOOST_SERIALIZATION_NVP(conditional_);
+      print("BASE ");
       if (!is_root) { // TODO(fan): Workaround for boost/serialization #119
-        ar & BOOST_SERIALIZATION_NVP(parent_);
+        std::cout << "==== BayesTreeCliqueBase !is_root\n";
+      
+        size_t parent_size;
+        {
+          boost::shared_ptr<DerivedType> ptr = parent_.lock();
+          parent_size = ptr->treeSize();
+        }
+        std::cout << "Parent size = " << parent_size << std::endl;
+              
+        ar & BOOST_SERIALIZATION_NVP(parent_); // <<-- Crash is here!
+        std::cout << "Done serializing parent of size = " << parent_size << std::endl;
+        
       }
-      ar & BOOST_SERIALIZATION_NVP(children);
+      else
+        std::cout << "==== BayesTreeCliqueBase is_root\n";
+      
+      std::cout << "Child list size = " << children.size() << std::endl;
+      for (derived_ptr a : children) {
+        std::cout << "Child Tree size = " << a->treeSize() << std::endl;
+        a->print();
+        ar & BOOST_SERIALIZATION_NVP(a);
+      }
+      
+      //ar & BOOST_SERIALIZATION_NVP(children);
+      std::cout << "Done serializing child list size = " << children.size() << std::endl;
     }
 
     /// @}
