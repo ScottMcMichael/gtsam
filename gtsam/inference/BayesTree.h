@@ -307,11 +307,22 @@ namespace gtsam {
         }
         catch(std::out_of_range&){
           data[ptr] = counter;
-          std::cout << "Assigned index " << counter << std::endl;
+//          std::cout << "Assigned index " << counter << std::endl;
           return counter++;
         }
       }
+      
       size_t size() const {return data.size();}
+      
+      size_t hasData(sharedClique ptr){
+        try {
+          size_t dummy = data.at(ptr);
+          return true;
+        }
+        catch(std::out_of_range&){
+          return false;
+        }
+      }
       
       /// Create ordered vector of clique pointers
       void makeCliqueVector(std::vector<sharedClique> &v) {
@@ -333,12 +344,10 @@ namespace gtsam {
       // Load all cliques into the map
       PointerIndexMap allCliques;
       for (sharedClique ptr : roots_) {
-        allCliques.getIndex(ptr);
-      }
-      std::cout << "Found " << allCliques.size() << " unique nodes in roots_." << std::endl;
-      for (std::pair<Key, sharedClique> p : nodes_) {
-        // Move to the root of the tree
-        sharedClique ptr = p.second;
+        if (!ptr->isRoot()) {
+          std::cout << "Found non-root in in roots_!!!!" << std::endl;
+        }
+        // Parse the entire tree starting from each root
         while (!ptr->isRoot()) {
           ptr = ptr->parent();
         }
@@ -346,6 +355,43 @@ namespace gtsam {
         q.push(ptr);
         while (!q.empty()) {
           ptr = q.front();
+          q.pop();
+          allCliques.getIndex(ptr);
+          for (sharedClique c : ptr->children) {
+            q.push(c);
+          }
+        }
+        std::cout << "After this root, have " << allCliques.size() << " unique nodes." << std::endl;
+        
+        
+      }
+      std::cout << "Found " << allCliques.size() << " unique nodes in roots_." << std::endl;
+
+      for (std::pair<Key, sharedClique> p : nodes_) {
+        // Parse the entire tree, but quit if we encounter a familiar node
+
+        // Move to the root of the tree
+        sharedClique ptr = p.second;
+        while (!ptr->isRoot()) {
+          if (allCliques.hasData(ptr)) {
+            //std::cout << "Breaking out early with found node" << std::endl;
+            break;
+          }
+          ptr = ptr->parent();
+        }
+        if (allCliques.hasData(ptr)) {
+          // Since we exhaustively searched the roots trees earlier, if we see a repeat here
+          // then this should all be previously searched nodes.
+          continue;
+        }
+        std::queue<sharedClique> q;
+        q.push(ptr);
+        while (!q.empty()) {
+          ptr = q.front();
+          if (allCliques.hasData(ptr)) {
+            //std::cout << "Breaking out early with found node" << std::endl;
+            break;
+          }
           q.pop();
           allCliques.getIndex(ptr);
           for (sharedClique c : ptr->children) {
@@ -364,33 +410,34 @@ namespace gtsam {
       for (sharedClique ptr : orderedCliques) {
         bool isRoot = ptr->isRoot();
         ptr->is_root = isRoot;
-        std::cout << "isRoot = " << isRoot << std::endl;
+        //std::cout << "isRoot = " << isRoot << std::endl;
         ptr->serializeNoLinks(ar);
         if (!isRoot) {
           size_t index = allCliques.getIndex(ptr->parent());
-          std::cout << "root index = " << index << std::endl;
+//          std::cout << "root index = " << index << std::endl;
           ar & BOOST_SERIALIZATION_NVP(index);
         }
         size_t numChildren = ptr->children.size();
         ar & BOOST_SERIALIZATION_NVP(numChildren);
         for (sharedClique c : ptr->children) {
           size_t index = allCliques.getIndex(c);
-          std::cout << "child index = " << index << std::endl;
+//          std::cout << "child index = " << index << std::endl;
           ar & BOOST_SERIALIZATION_NVP(index);
         }
       }
       std::cout << "Done recording sorted cliques." << std::endl;
       
-      // Record the tree structure
-      // TODO: Can we just record the indices here?
+      // Record nodes_
+      // - Instead of pointers, record indices in the sorted clique vector
       size_t numNodes = nodes_.size();
       ar & BOOST_SERIALIZATION_NVP(numNodes);
       for (std::pair<Key, sharedClique> p : nodes_) {
         Key k = p.first;
         ar & BOOST_SERIALIZATION_NVP(k);
         size_t index = allCliques.getIndex(p.second);
-        std::cout << "node index = " << index << std::endl;
+        //std::cout << "node index = " << index << std::endl;
         ar & BOOST_SERIALIZATION_NVP(index);
+        // Just record the node indices here, no need to go through the tree
 /*
         // Move to the root of the tree
         sharedClique ptr = p.second;
@@ -418,7 +465,7 @@ namespace gtsam {
       }
       std::cout << "Done recording nodes_." << std::endl;
       
-      // Record the roots_ vector
+      // Record roots_
       size_t numRoots = roots_.size();
       ar & BOOST_SERIALIZATION_NVP(numRoots);
       for (sharedClique ptr : roots_) {
@@ -437,7 +484,7 @@ namespace gtsam {
       nodes_.clear();
       roots_.clear();
       
-      // First create all of the ordered cliques
+      // First create all of the ordered cliques in memory
       size_t numCliques;
       ar & BOOST_SERIALIZATION_NVP(numCliques);
       std::vector<sharedClique> orderedCliques(numCliques);
@@ -447,6 +494,7 @@ namespace gtsam {
       std::cout << "Done creating " << numCliques << " cliques." << std::endl;
 
       // Now initialize the ordered cliques, including links between them
+      // - Links are specified by the index number of the ordered clique vector
       size_t numChildren, index;
       for (sharedClique &ptr : orderedCliques) {
         ptr->serializeNoLinks(ar);
@@ -467,7 +515,7 @@ namespace gtsam {
       }
       std::cout << "Done linking initial cliques." << std::endl;
       
-      // TODO: Good enough?
+      // Populate nodes_
       size_t numNodes;
       ar & BOOST_SERIALIZATION_NVP(numNodes);
       std::cout << "numNodes: " << numNodes << std::endl;
@@ -481,6 +529,7 @@ namespace gtsam {
       }
       std::cout << "Done loading nodes." << std::endl;
       
+      // Populate roots_
       size_t numRoots;
       ar & BOOST_SERIALIZATION_NVP(numRoots);
       std::cout << "numRoots: " << numRoots << std::endl;
