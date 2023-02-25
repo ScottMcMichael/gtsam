@@ -218,7 +218,6 @@ namespace gtsam {
       }
       ar & BOOST_SERIALIZATION_NVP(is_root);
       ar & BOOST_SERIALIZATION_NVP(conditional_);
-      print("BASE ");
       if (!is_root) { // TODO(fan): Workaround for boost/serialization #119
         ar & BOOST_SERIALIZATION_NVP(parent_);
       }
